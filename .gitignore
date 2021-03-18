@@ -1,2 +1,4 @@
 _build/
 Output/
+*.emSession
+*.jlink
