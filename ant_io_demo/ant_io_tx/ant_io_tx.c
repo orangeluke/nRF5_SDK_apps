@@ -132,7 +132,7 @@ static void handle_transmit()
 
     err_code = sd_ant_broadcast_message_tx(ANT_CHANNEL_NUM,
                                            ANT_STANDARD_DATA_PAYLOAD_SIZE,
-                                           m_broadcast_data);
+                                           m_broadcast_data); // This applies to the next message that is sent on the timeslot
     APP_ERROR_CHECK(err_code);
 }
 
@@ -172,12 +172,12 @@ void ant_io_tx_setup(void)
     ant_channel_config_t channel_config =
     {
         .channel_number    = ANT_CHANNEL_NUM,
-        .channel_type      = CHANNEL_TYPE_MASTER,
+        .channel_type      = CHANNEL_TYPE_MASTER, // Master acts as the primary transmitter.  Use for sending commands
         .ext_assign        = 0x00,
         .rf_freq           = RF_FREQ,
         .transmission_type = CHAN_ID_TRANS_TYPE,
         .device_type       = CHAN_ID_DEV_TYPE,
-        .device_number     = NRF_FICR->DEVICEID[0],
+        .device_number     = NRF_FICR->DEVICEID[0], // (FICR = Factory information configuration registers) basically a nordic serial number
         .channel_period    = CHAN_PERIOD,
         .network_number    = ANT_NETWORK_NUM,
     };
@@ -211,7 +211,7 @@ static void ant_evt_handler(ant_evt_t * p_ant_evt, void * p_context)
 
         case EVENT_TX:
             // Transmit data on the reverse direction every channel period
-            handle_transmit();
+            handle_transmit(); // this happens
             break;
 
         default:

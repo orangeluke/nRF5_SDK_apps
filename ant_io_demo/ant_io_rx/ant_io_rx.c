@@ -173,7 +173,7 @@ void ant_io_rx_setup(void)
     ant_channel_config_t channel_config =
     {
         .channel_number    = ANT_CHANNEL_NUM,
-        .channel_type      = CHANNEL_TYPE_SLAVE,
+        .channel_type      = CHANNEL_TYPE_SLAVE, // Slave acts as the primary receiver.  Use for recieving
         .ext_assign        = 0x00,
         .rf_freq           = RF_FREQ,
         .transmission_type = CHAN_ID_TRANS_TYPE,
