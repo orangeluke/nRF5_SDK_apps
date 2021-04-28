@@ -111,10 +111,6 @@ void blink_handler(void * p_context)
 }
 
 
-void blink_once_handler(void * p_context)
-{
-    bsp_board_led_off((uint32_t) p_context);
-}
 
 #define ENDLINE_STRING "\r\n"
 
@@ -145,21 +141,9 @@ APP_USBD_CDC_ACM_GLOBAL_DEF(m_app_cdc_acm,
 
 // BLE DEFINES START
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
-
 #define APP_FEATURE_NOT_SUPPORTED       BLE_GATT_STATUS_ATTERR_APP_BEGIN + 2        /**< Reply when unsupported features are requested. */
-
-// #define DEVICE_NAME                     "Nordic_USBD_BLE_UART_C"                    /**< Name of device. Will be included in the advertising data. */
 #define NUS_SERVICE_UUID_TYPE           BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
-
 #define APP_BLE_OBSERVER_PRIO           3                                           /**< Application's BLE observer priority. You shouldn't need to modify this value. */
-
-// For GAP (Do we even need for central?) - dont think so
-//#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(20, UNIT_1_25_MS)             /**< Minimum acceptable connection interval (20 ms). Connection interval uses 1.25 ms units. */
-//#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(75, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (75 ms). Connection interval uses 1.25 ms units. */
-//#define SLAVE_LATENCY                   0                                           /**< Slave latency. */
-//#define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(4000, UNIT_10_MS)             /**< Connection supervisory timeout (4 seconds). Supervision Timeout uses 10 ms units. */
-
-
 #define DEAD_BEEF                       0xDEADBEEF                                  /**< Value used as error code on stack dump. Can be used to identify stack location on stack unwind. */
 
 // NUS_C instance
@@ -174,7 +158,6 @@ NRF_BLE_GQ_DEF(m_ble_gatt_queue,                                                
                NRF_BLE_GQ_QUEUE_SIZE);
 
 
-
 static uint16_t     m_ble_nus_max_data_len = BLE_GATT_ATT_MTU_DEFAULT - OPCODE_LENGTH - HANDLE_LENGTH;          /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Nordic UART service module. */
 static char         m_nus_data_array[BLE_NUS_MAX_DATA_LEN];
 
@@ -184,6 +167,8 @@ static ble_uuid_t const m_nus_uuid =
     .uuid = BLE_UUID_NUS_SERVICE,
     .type = NUS_SERVICE_UUID_TYPE
 };
+
+
 
 // BLE DEFINES END
 
@@ -204,13 +189,22 @@ void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
     app_error_handler(DEAD_BEEF, line_num, p_file_name);
 }
 
+
 /**@brief Function for handling the Nordic UART Service Client errors.
  *
  * @param[in]   nrf_error   Error code containing information about what went wrong.
  */
 static void nus_error_handler(uint32_t nrf_error)
 {
-    APP_ERROR_HANDLER(nrf_error);
+    //APP_ERROR_HANDLER(nrf_error);
+    
+    // This is generated from ble_nus_c_string_send when there are too many queued notifications
+    // This happens as result from the UI sending messages to the serial port too fast, because the write is tied to a slider_value changed event
+    // Could sort this out in the UI to avoid slider/servo value being out of sync if bulk packets not sent
+    if (nrf_error != NRF_ERROR_RESOURCES) // https://devzone.nordicsemi.com/f/nordic-q-a/35125/how-to-deal-with-nrf_error_resources
+    {
+        APP_ERROR_HANDLER(nrf_error);
+    }
 }
 
 
@@ -226,6 +220,7 @@ static void scan_start(void)
     APP_ERROR_CHECK(ret);
 }
 
+
 /** @brief Function for initializing the timer module. */
 static void timers_init(void)
 {
@@ -234,50 +229,6 @@ static void timers_init(void)
     err_code = app_timer_create(&m_blink_ble, APP_TIMER_MODE_REPEATED, blink_handler);
     APP_ERROR_CHECK(err_code);
     err_code = app_timer_create(&m_blink_cdc, APP_TIMER_MODE_REPEATED, blink_handler);
-    APP_ERROR_CHECK(err_code);
-    err_code = app_timer_create(&m_flash_cdc, APP_TIMER_MODE_SINGLE_SHOT, blink_once_handler);
-    APP_ERROR_CHECK(err_code);
-}
-
-#if 0
-/**
- * @brief Function for the GAP initialization.
- *
- * @details This function sets up all the necessary GAP (Generic Access Profile) parameters of
- *          the device. It also sets the permissions and appearance.
- */
-static void gap_params_init(void)
-{
-    uint32_t                err_code;
-    ble_gap_conn_params_t   gap_conn_params;
-    ble_gap_conn_sec_mode_t sec_mode;
-
-    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
-
-    err_code = sd_ble_gap_device_name_set(&sec_mode,
-                                          (const uint8_t *) DEVICE_NAME,
-                                          strlen(DEVICE_NAME));
-    APP_ERROR_CHECK(err_code);
-
-    memset(&gap_conn_params, 0, sizeof(gap_conn_params));
-
-    gap_conn_params.min_conn_interval = MIN_CONN_INTERVAL;
-    gap_conn_params.max_conn_interval = MAX_CONN_INTERVAL;
-    gap_conn_params.slave_latency     = SLAVE_LATENCY;
-    gap_conn_params.conn_sup_timeout  = CONN_SUP_TIMEOUT;
-
-    err_code = sd_ble_gap_ppcp_set(&gap_conn_params); // Set GAP Peripheral Preferred Connection Parameters using what we just set
-    APP_ERROR_CHECK(err_code);
-}
-#endif
-
-
-static void flash_led(uint32_t led_idx)
-{
-    bsp_board_led_on(led_idx);
-    ret_code_t err_code = app_timer_start(m_flash_cdc,
-                              APP_TIMER_TICKS(LED_FLASH_INTERVAL),
-                              (void *) led_idx);
     APP_ERROR_CHECK(err_code);
 }
 
@@ -322,6 +273,7 @@ static void scan_evt_handler(scan_evt_t const * p_scan_evt)
     }
 }
 
+
 /**@brief Function for initializing the scanning and setting the filters.
  */
 static void scan_init(void)
@@ -344,6 +296,7 @@ static void scan_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
+
 /**@brief Function for handling database discovery events.
  *
  * @details This function is a callback function to handle events from the database discovery module.
@@ -358,46 +311,6 @@ static void db_disc_handler(ble_db_discovery_evt_t * p_evt)
 }
 
 
-/**
- * @brief Function for handling the data from the Nordic UART Service.
- *
- * @details This function processes the data received from the Nordic UART BLE Service and sends
- *          it to the USBD CDC ACM module.
- *
- * @param[in] p_evt Nordic UART Service event.
- */
-#if 0 // not used, mabye ifdefed out for a reason?
-static void nus_data_handler(ble_nus_evt_t * p_evt)
-{
-
-    if (p_evt->type == BLE_NUS_EVT_RX_DATA)
-    {
-        bsp_board_led_invert(LED_BLE_NUS_RX);
-        NRF_LOG_DEBUG("Received data from BLE NUS. Writing data on CDC ACM.");
-        NRF_LOG_HEXDUMP_DEBUG(p_evt->params.rx_data.p_data, p_evt->params.rx_data.length);
-        memcpy(m_nus_data_array, p_evt->params.rx_data.p_data, p_evt->params.rx_data.length);
-
-        // Add endline characters
-        uint16_t length = p_evt->params.rx_data.length;
-        if (length + sizeof(ENDLINE_STRING) < BLE_NUS_MAX_DATA_LEN)
-        {
-            memcpy(m_nus_data_array + length, ENDLINE_STRING, sizeof(ENDLINE_STRING));
-            length += sizeof(ENDLINE_STRING);
-        }
-
-        // Send data through CDC ACM
-        ret_code_t ret = app_usbd_cdc_acm_write(&m_app_cdc_acm,
-                                                m_nus_data_array,
-                                                length);
-        if(ret != NRF_SUCCESS)
-        {
-            NRF_LOG_INFO("CDC ACM unavailable, data received: %s", m_nus_data_array);
-        }
-    }
-
-}
-#endif
-
 /**@brief Function for handling characters received by the Nordic UART Service (NUS).
  *
  * @details This function takes a list of characters of length data_len and sends them through CDC ACM
@@ -405,7 +318,7 @@ static void nus_data_handler(ble_nus_evt_t * p_evt)
  */
 static void ble_nus_chars_received_uart_print(uint8_t * p_data, uint16_t data_len)
 {
-    flash_led(LED_BLE_NUS_RX);
+    bsp_board_led_invert(LED_BLE_NUS_RX);
 
     NRF_LOG_DEBUG("Received data from BLE NUS. Writing data on CDC ACM.");
     NRF_LOG_HEXDUMP_DEBUG(p_data, data_len);
@@ -475,8 +388,8 @@ static void nus_c_init(void)
     ble_nus_c_init_t init;
 
     init.evt_handler   = ble_nus_c_evt_handler;
-    init.error_handler = nus_error_handler; // both from the UART CENTRAL EXAMPLE, MABYE NEED MABYE NOT?
-    init.p_gatt_queue  = &m_ble_gatt_queue; // old usbd example didnt have them so unsure
+    init.error_handler = nus_error_handler;
+    init.p_gatt_queue  = &m_ble_gatt_queue;
 
     err_code = ble_nus_c_init(&m_ble_nus_c, &init);
     APP_ERROR_CHECK(err_code);
@@ -663,10 +576,10 @@ void gatt_init(void)
     err_code = nrf_ble_gatt_init(&m_gatt, gatt_evt_handler);
     APP_ERROR_CHECK(err_code);
 
-    err_code = nrf_ble_gatt_att_mtu_periph_set(&m_gatt, NRF_SDH_BLE_GATT_MAX_MTU_SIZE);
+    //err_code = nrf_ble_gatt_att_mtu_periph_set(&m_gatt, NRF_SDH_BLE_GATT_MAX_MTU_SIZE);
 
     // IMPORTANT - it should be what is below instead, but old working example was set to peripheral - try both
-    //err_code = nrf_ble_gatt_att_mtu_central_set(&m_gatt, NRF_SDH_BLE_GATT_MAX_MTU_SIZE);
+    err_code = nrf_ble_gatt_att_mtu_central_set(&m_gatt, NRF_SDH_BLE_GATT_MAX_MTU_SIZE);
     APP_ERROR_CHECK(err_code);
 }
 
@@ -700,7 +613,6 @@ void bsp_event_handler(bsp_event_t event)
             break;
     }
 }
-
 
 
 /** @brief Function for initializing buttons and LEDs. */
@@ -739,6 +651,7 @@ static void idle_state_handle(void)
     UNUSED_RETURN_VALUE(NRF_LOG_PROCESS());
     power_manage();
 }
+
 
 
 // USB CODE START
@@ -798,21 +711,28 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
                 {
                     if (index > 1)
                     {
-                        flash_led(LED_CDC_ACM_RX);
-
+                        bsp_board_led_invert(LED_BLE_NUS_RX);
                         NRF_LOG_DEBUG("Ready to send data over BLE NUS");
                         NRF_LOG_HEXDUMP_DEBUG(m_cdc_data_array, index);
 
                         do
                         {
                             uint16_t length = (uint16_t)index;
-                            if (length + sizeof(ENDLINE_STRING) < BLE_NUS_MAX_DATA_LEN)
-                            {
-                                memcpy(m_cdc_data_array + length, ENDLINE_STRING, sizeof(ENDLINE_STRING));
-                                length += sizeof(ENDLINE_STRING);
-                            }
 
+                            // Commented because letting the sender decide whether endline string is added
+                            //if (length + sizeof(ENDLINE_STRING) < BLE_NUS_MAX_DATA_LEN)
+                            //{
+                            //    memcpy(m_cdc_data_array + length, ENDLINE_STRING, sizeof(ENDLINE_STRING));
+                            //    length += sizeof(ENDLINE_STRING);
+                            //}
+                            //
+                            //ret = ble_nus_c_string_send(&m_ble_nus_c, (uint8_t *) m_cdc_data_array, length);
+
+                            nrf_gpio_pin_toggle(NRF_GPIO_PIN_MAP(1, 15));
+                            
                             ret = ble_nus_c_string_send(&m_ble_nus_c, (uint8_t *) m_cdc_data_array, length);
+
+                            //nrf_gpio_pin_clear(NRF_GPIO_PIN_MAP(1, 15));
 
                             if (ret == NRF_ERROR_NOT_FOUND)
                             {
@@ -915,6 +835,8 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event)
 
 // USB CODE END
 
+
+
 /** @brief Function for initializing the database discovery module. */
 static void db_discovery_init(void)
 {
@@ -970,6 +892,8 @@ int main(void)
 
     ret = app_usbd_power_events_enable();
     APP_ERROR_CHECK(ret);
+
+    nrf_gpio_cfg_output(NRF_GPIO_PIN_MAP(1, 15));
 
     // Enter main loop.
     for (;;)

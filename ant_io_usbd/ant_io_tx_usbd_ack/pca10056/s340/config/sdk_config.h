@@ -59,10 +59,6 @@
 #define ANT_NETWORK_NUM 0
 #endif
 
-// <o> CHAN_ID_DEV_NUM - Channel ID: Device Number. 
-#ifndef CHAN_ID_DEV_NUM
-#define CHAN_ID_DEV_NUM 0
-#endif
 
 // <o> CHAN_ID_DEV_TYPE - Channel ID: Device Type. 
 #ifndef CHAN_ID_DEV_TYPE
@@ -76,7 +72,7 @@
 
 // <o> CHAN_PERIOD - Channel Period (in 32 kHz counts). 
 #ifndef CHAN_PERIOD
-#define CHAN_PERIOD 8192
+#define CHAN_PERIOD 256
 #endif
 
 // <o> RF_FREQ - RF Frequency. 

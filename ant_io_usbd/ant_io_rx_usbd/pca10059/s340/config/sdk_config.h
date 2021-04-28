@@ -66,17 +66,17 @@
 
 // <o> CHAN_ID_DEV_TYPE - Channel ID: Device Type. 
 #ifndef CHAN_ID_DEV_TYPE
-#define CHAN_ID_DEV_TYPE 3
+#define CHAN_ID_DEV_TYPE 1 // was 3
 #endif
 
 // <o> CHAN_ID_TRANS_TYPE - Channel ID: Transmission type. 
 #ifndef CHAN_ID_TRANS_TYPE
-#define CHAN_ID_TRANS_TYPE 1
+#define CHAN_ID_TRANS_TYPE 5 // was 1
 #endif
 
 // <o> CHAN_PERIOD - Channel Period (in 32 kHz counts). 
 #ifndef CHAN_PERIOD
-#define CHAN_PERIOD 8192
+#define CHAN_PERIOD 256
 #endif
 
 // <o> RF_FREQ - RF Frequency. 

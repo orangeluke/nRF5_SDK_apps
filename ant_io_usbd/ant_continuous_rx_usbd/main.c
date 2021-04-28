@@ -118,6 +118,33 @@ APP_USBD_CDC_ACM_GLOBAL_DEF(m_app_cdc_acm,
 // USB DEFINES END
 
 
+// Other defs
+
+APP_TIMER_DEF(m_flash_led);
+
+
+void blink_once_handler(void * p_context)
+{
+    bsp_board_led_off((uint32_t) p_context);
+}
+
+static void flash_led(uint32_t led_idx)
+{
+    bsp_board_led_on(led_idx);
+    ret_code_t err_code = app_timer_start(m_flash_led,
+                              APP_TIMER_TICKS(300),
+                              (void *) led_idx);
+    APP_ERROR_CHECK(err_code);
+}
+
+static void app_timers_setup()
+{
+    ret_code_t err_code = app_timer_create(&m_flash_led, APP_TIMER_MODE_SINGLE_SHOT, blink_once_handler);
+    APP_ERROR_CHECK(err_code);
+}
+
+
+
 
 
 // CODE FROM ant_io_rx.c START
@@ -138,7 +165,7 @@ static uint8_t m_last_recieved_data[ANT_STANDARD_DATA_PAYLOAD_SIZE - 1 + 2];  /*
  * Byte 1-6 = TODO
  * Byte 7   = TODO
  */
-static void handle_transmit() // skeleton for if this need to be implemented
+static void handle_transmit() // decide what we actually want to sent back - will probably only be used for acknowledgement
 {
     uint32_t err_code;
 
@@ -172,25 +199,18 @@ void ant_io_rx_setup(void)
         .rf_freq           = RF_FREQ,
         .transmission_type = CHAN_ID_TRANS_TYPE, // can be 0 for slave
         .device_type       = CHAN_ID_DEV_TYPE,   // describes the device type - unsure how this affects things
-        .device_number     = CHAN_ID_DEV_NUM,    // can be 0 for slave
-        .channel_period    = CHAN_PERIOD,        // basic message rate of data packets sent by master 
+        .device_number     = 0x00,               // wildcard
+        .channel_period    = 0x00,               // not used as we are scanning
         .network_number    = ANT_NETWORK_NUM,
     };
-
-    ant_search_config_t search_config  = DEFAULT_ANT_SEARCH_CONFIG(ANT_CHANNEL_NUM);
-    search_config.low_priority_timeout = ANT_LOW_PRIORITY_TIMEOUT_DISABLE;
 
     // Configure channel parameters
     err_code = ant_channel_init(&channel_config);
     APP_ERROR_CHECK(err_code);
 
-    // Configure search
-    err_code = ant_search_init(&search_config);
+    err_code = sd_ant_rx_scan_mode_start(ANT_CHANNEL_NUM);
     APP_ERROR_CHECK(err_code);
 
-    // Open channel.
-    err_code = sd_ant_channel_open(ANT_CHANNEL_NUM);
-    APP_ERROR_CHECK(err_code);
 }
 
 /**@brief Function for handling a ANT stack event.
@@ -205,9 +225,11 @@ static void ant_evt_handler(ant_evt_t * p_ant_evt, void * p_context)
         case EVENT_RX: // Recieve - happens every channel period
             if (p_ant_evt->message.ANT_MESSAGE_aucPayload[0] == ANT_CUSTOM_PAGE) // make sure the message contains the correct page
             {
+                nrf_gpio_pin_toggle(NRF_GPIO_PIN_MAP(1, 15));
+
                 bsp_board_led_invert(BSP_BOARD_LED_1);
 
-                // Store previous message
+                // Store previous message to compare later
                 uint8_t old_data[ANT_STANDARD_DATA_PAYLOAD_SIZE - 1 + 2];
                 memcpy(old_data, m_last_recieved_data, 8);
 
@@ -224,13 +246,12 @@ static void ant_evt_handler(ant_evt_t * p_ant_evt, void * p_context)
                 // print to USB if content has changed
                 if (memcmp(old_data, m_last_recieved_data, 8) != 0)
                 {
-                    nrf_gpio_pin_toggle(NRF_GPIO_PIN_MAP(1, 15));
                     app_usbd_cdc_acm_write(&m_app_cdc_acm, m_last_recieved_data, strlen(m_last_recieved_data));
                 }
 
             }
 
-            //handle_transmit(); // Only want to transmit something if we need the master to know something
+            //handle_transmit(); // Only want to transmit something if we need the master to know something (i.e, maybe for acknowledge)
             break;
 
         case EVENT_TX: // Transmit - happens every time a message is transmitted from this device (whenever sd_ant_broadcast_message_tx() is called)
@@ -259,14 +280,16 @@ static void utils_setup(void)
     ret_code_t err_code = app_timer_init();
     APP_ERROR_CHECK(err_code);
 
+    app_timers_setup(); // setup led app-timers
+
     err_code = bsp_init(BSP_INIT_LEDS | BSP_INIT_BUTTONS,
                         NULL);
     APP_ERROR_CHECK(err_code);
 
-    nrf_gpio_cfg_output(NRF_GPIO_PIN_MAP(1, 15)); // set gpio 15 to output so we can set and clear it to measure latencies
-
     err_code = nrf_pwr_mgmt_init(); // TODO
     APP_ERROR_CHECK(err_code);
+
+    nrf_gpio_cfg_output(NRF_GPIO_PIN_MAP(1, 15));
 }
 
 /**@brief Function for ANT stack initialization.
@@ -332,7 +355,41 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
 
         case APP_USBD_CDC_ACM_USER_EVT_RX_DONE: // happens when data is sent to serial (i.e the user sends via putty)
         {
-            // do nothing because slave isnt sending any data
+            /*
+            ret_code_t ret;
+            static uint8_t index = 0;
+            index++;
+
+            do
+            {
+                if ((m_cdc_data_array[index - 1] == '\n') ||
+                    (m_cdc_data_array[index - 1] == '\r') ||
+                    (index >= (20)))
+                {
+                    if (index > 1)
+                    {
+                        // send over ble (or ant in this case)
+                    }
+
+                    index = 0;
+                }
+
+                /Get amount of data transferred
+                size_t size = app_usbd_cdc_acm_rx_size(p_cdc_acm);
+                NRF_LOG_DEBUG("RX: size: %lu char: %c", size, m_cdc_data_array[index - 1]);
+
+                // Fetch data until internal buffer is empty 
+                ret = app_usbd_cdc_acm_read(&m_app_cdc_acm,
+                                            &m_cdc_data_array[index],
+                                            1);
+                if (ret == NRF_SUCCESS)
+                {
+                    index++;
+                }
+            }
+            while (ret == NRF_SUCCESS);
+            */
+
             break;
         }
         default:

@@ -153,8 +153,8 @@ APP_USBD_CDC_ACM_GLOBAL_DEF(m_app_cdc_acm,
 #define APP_ADV_DURATION                18000                                       /**< The advertising duration (180 seconds) in units of 10 milliseconds. */
 
 
-#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(20, UNIT_1_25_MS)             /**< Minimum acceptable connection interval (20 ms). Connection interval uses 1.25 ms units. */
-#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(75, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (75 ms). Connection interval uses 1.25 ms units. */
+#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(7.5, UNIT_1_25_MS) // was 20            /**< Minimum acceptable connection interval (20 ms). Connection interval uses 1.25 ms units. */
+#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(7.5, UNIT_1_25_MS)  // was 75           /**< Maximum acceptable connection interval (75 ms). Connection interval uses 1.25 ms units. */
 #define SLAVE_LATENCY                   0                                           /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(4000, UNIT_10_MS)             /**< Connection supervisory timeout (4 seconds). Supervision Timeout uses 10 ms units. */
 #define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(5000)                       /**< Time from initiating an event (connect or start of notification) to the first time sd_ble_gap_conn_param_update is called (5 seconds). */
@@ -264,8 +264,10 @@ static void nus_data_handler(ble_nus_evt_t * p_evt)
 
     if (p_evt->type == BLE_NUS_EVT_RX_DATA)
     {
-        //bsp_board_led_invert(LED_BLE_NUS_RX);
-        flash_led(LED_BLE_NUS_RX);
+
+        nrf_gpio_pin_toggle(NRF_GPIO_PIN_MAP(1, 15));
+
+        bsp_board_led_invert(LED_BLE_NUS_RX);
         NRF_LOG_DEBUG("Received data from BLE NUS. Writing data on CDC ACM.");
         NRF_LOG_HEXDUMP_DEBUG(p_evt->params.rx_data.p_data, p_evt->params.rx_data.length);
         memcpy(m_nus_data_array, p_evt->params.rx_data.p_data, p_evt->params.rx_data.length);
@@ -736,19 +738,20 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
                 {
                     if (index > 1)
                     {
-                        flash_led(LED_CDC_ACM_RX);
-                        //bsp_board_led_invert(LED_CDC_ACM_RX);
+                        bsp_board_led_invert(LED_CDC_ACM_RX);
                         NRF_LOG_DEBUG("Ready to send data over BLE NUS");
                         NRF_LOG_HEXDUMP_DEBUG(m_cdc_data_array, index);
 
                         do
                         {
                             uint16_t length = (uint16_t)index;
-                            if (length + sizeof(ENDLINE_STRING) < BLE_NUS_MAX_DATA_LEN)
-                            {
-                                memcpy(m_cdc_data_array + length, ENDLINE_STRING, sizeof(ENDLINE_STRING));
-                                length += sizeof(ENDLINE_STRING);
-                            }
+
+                            // Commented because letting the sender decide whether endline string is added
+                            //if (length + sizeof(ENDLINE_STRING) < BLE_NUS_MAX_DATA_LEN)
+                            //{
+                            //    memcpy(m_cdc_data_array + length, ENDLINE_STRING, sizeof(ENDLINE_STRING));
+                            //    length += sizeof(ENDLINE_STRING);
+                            //}
 
                             ret = ble_nus_data_send(&m_nus,
                                                     (uint8_t *) m_cdc_data_array,
@@ -895,6 +898,8 @@ int main(void)
 
     ret = app_usbd_power_events_enable();
     APP_ERROR_CHECK(ret);
+
+    nrf_gpio_cfg_output(NRF_GPIO_PIN_MAP(1, 15));
 
     // Enter main loop.
     for (;;)

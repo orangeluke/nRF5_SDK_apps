@@ -124,54 +124,49 @@ APP_USBD_CDC_ACM_GLOBAL_DEF(m_app_cdc_acm,
 
 
 
+// Other defs
+
+// Other defs
+
+#define LED_FLASH_INTERVAL 1000/(32768/CHAN_PERIOD) // flash for as many ms as an ANT channel period
+
+APP_TIMER_DEF(m_flash_led);
+
+
+void blink_once_handler(void * p_context)
+{
+    bsp_board_led_off((uint32_t) p_context);
+}
+
+static void flash_led(uint32_t led_idx)
+{
+    bsp_board_led_on(led_idx);
+    ret_code_t err_code = app_timer_start(m_flash_led,
+                              APP_TIMER_TICKS(LED_FLASH_INTERVAL),
+                              (void *) led_idx);
+    APP_ERROR_CHECK(err_code);
+}
+
+static void app_timers_setup()
+{
+    ret_code_t err_code = app_timer_create(&m_flash_led, APP_TIMER_MODE_SINGLE_SHOT, blink_once_handler);
+    APP_ERROR_CHECK(err_code);
+}
+
+
+
 
 
 // CODE FROM ant_io_tx.c START
 // =============================================================================================================================================================
 // Data Page Numbers
-#define DIGITALIO_DATA_PID              1u                      /**< Page number: digital data. */
+#define ANT_CUSTOM_PAGE                 ((uint8_t) 1)           // Page number to identify data format
 
 #define APP_ANT_OBSERVER_PRIO           1                       /**< Application's ANT observer priority. You shouldn't need to modify this value. */
 
 // Static variables and buffers.
 static uint8_t m_broadcast_data[ANT_STANDARD_DATA_PAYLOAD_SIZE];    /**< Primary data transmit buffer. */
-static uint8_t m_rx_input_pin_state = 0xFF;                         /**< State of received digital data, from the other node. */
-static uint8_t m_tx_input_pin_state = 0xFF;                         /**< State of digital inputs in this node, for transmission. */
 
-
-/**@brief Encode current state of buttons
- *
- * Configure bitfield encoding the state of the buttons
- * Bit 0 = 0 if BSP_BUTTON_0 is pressed
- * Bit 1 = 0 if BSP_BUTTON_1 is pressed
- * Bit 2 = 0 if BSP_BUTTON_2 is pressed
- * Bit 3 = 0 if BSP_BUTTON_3 is pressed
- * Bit 4-7 = 1 (unused)
- */
-static void button_state_encode(void)
-{
-    m_tx_input_pin_state = 0xFF;
-
-    if (bsp_button_is_pressed(0))
-    {
-        m_tx_input_pin_state &= 0xFE;
-    }
-
-    if (bsp_button_is_pressed(1))
-    {
-        m_tx_input_pin_state &= 0xFD;
-    }
-
-    if (bsp_button_is_pressed(2))
-    {
-        m_tx_input_pin_state &= 0xFB;
-    }
-
-    if (bsp_button_is_pressed(3))
-    {
-        m_tx_input_pin_state &= 0xF7;
-    }
-}
 
 
 /**@brief Formats page with current button state and sends data
@@ -183,50 +178,24 @@ static void handle_transmit()
 {
     uint32_t err_code;
 
-    button_state_encode();
-
-    m_broadcast_data[0] = DIGITALIO_DATA_PID;
-    m_broadcast_data[1] = 0xFF;
-    m_broadcast_data[2] = 0xFF;
-    m_broadcast_data[3] = 0xFF;
-    m_broadcast_data[4] = 0xFF;
-    m_broadcast_data[5] = 0xFF;
-    m_broadcast_data[6] = 0xFF;
-    m_broadcast_data[7] = m_tx_input_pin_state;
-
+    // We only broadcast one format of data, the first byte represents this
+    m_broadcast_data[0] = ANT_CUSTOM_PAGE;
+    // These rest of the array is set from a USBD RX event, until then will be at their initialised values (0 because static global)
+    
+    nrf_gpio_pin_set(NRF_GPIO_PIN_MAP(1, 15));        
     err_code = sd_ant_broadcast_message_tx(ANT_CHANNEL_NUM,
                                            ANT_STANDARD_DATA_PAYLOAD_SIZE,
                                            m_broadcast_data); // This applies to the next message that is sent on the timeslot
+    nrf_gpio_pin_clear(NRF_GPIO_PIN_MAP(1, 15));
+    // gives a latency of 44.2 microseconds...
+    // probably because this is setting the next packet
+    // after the previous one has already been sent
+    // which gives very misleading results
+
     APP_ERROR_CHECK(err_code);
 }
 
 
-/**@brief Turns on LEDs according to the contents of the received data page.
- */
-static void led_state_set()
-{
-    uint8_t led_state_field = ~m_rx_input_pin_state;
-
-    if (led_state_field & 1)
-        bsp_board_led_on(BSP_BOARD_LED_0);
-    else
-        bsp_board_led_off(BSP_BOARD_LED_0);
-
-    if (led_state_field & 2)
-        bsp_board_led_on(BSP_BOARD_LED_1);
-    else
-        bsp_board_led_off(BSP_BOARD_LED_1);
-
-    if (led_state_field & 4)
-        bsp_board_led_on(BSP_BOARD_LED_2);
-    else
-        bsp_board_led_off(BSP_BOARD_LED_2);
-
-    if (led_state_field & 8)
-        bsp_board_led_on(BSP_BOARD_LED_3);
-    else
-        bsp_board_led_off(BSP_BOARD_LED_3);
-}
 
 
 void ant_io_tx_setup(void)
@@ -265,18 +234,28 @@ static void ant_evt_handler(ant_evt_t * p_ant_evt, void * p_context)
     switch (p_ant_evt->event)
     {
         case EVENT_RX:
-            if (p_ant_evt->message.ANT_MESSAGE_aucPayload[0] == DIGITALIO_DATA_PID)
+
+            if (p_ant_evt->message.ANT_MESSAGE_aucPayload[0] == ANT_CUSTOM_PAGE) // check rx to see what this is (not done yet)
             {
                 // Set LEDs according to Received Digital IO Data Page
-                m_rx_input_pin_state = p_ant_evt->message.ANT_MESSAGE_aucPayload[7];
-                led_state_set();
+                //m_rx_input_pin_state = p_ant_evt->message.ANT_MESSAGE_aucPayload[7];
+                //led_state_set();
             }
             break;
 
-        case EVENT_TX:
+        case EVENT_TX: // Use this to set the broadcast message every period ONLY IF BROADCASTING
             // Transmit data on the reverse direction every channel period
-            handle_transmit(); // this happens
+            bsp_board_led_invert(BSP_BOARD_LED_2);
+            handle_transmit();
             break;
+
+        // LOOK INTO USING THIS TO SET THE GPIO PIN
+        case EVENT_TRANSFER_TX_START: // this is only for burst transfers so does nothing
+            //nrf_gpio_pin_set(NRF_GPIO_PIN_MAP(1, 15));
+            //nrf_gpio_pin_clear(NRF_GPIO_PIN_MAP(1, 15));
+            break;
+        
+
 
         default:
             break;
@@ -301,9 +280,13 @@ static void utils_setup(void)
     ret_code_t err_code = app_timer_init();
     APP_ERROR_CHECK(err_code);
 
+    app_timers_setup();
+
     err_code = bsp_init(BSP_INIT_LEDS | BSP_INIT_BUTTONS,
                         NULL);
     APP_ERROR_CHECK(err_code);
+
+    nrf_gpio_cfg_output(NRF_GPIO_PIN_MAP(1, 15)); // set gpio 15 to output so we can set and clear it to measure latencies
 
     err_code = nrf_pwr_mgmt_init();
     APP_ERROR_CHECK(err_code);
@@ -373,27 +356,32 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
         {
             ret_code_t ret;
             static uint8_t index = 0;
+            uint8_t sent = 0; // track if broadcast has been set
             index++;
 
-            do
+            do // this will loop through every character sent
             {
                 if ((m_cdc_data_array[index - 1] == '\n') ||
                     (m_cdc_data_array[index - 1] == '\r') ||
-                    (index >= (20)))
+                    (index >= 7))
                 {
-                    if (index > 1)
+                    if ((index == 7) && (sent == 0)) // When we reach 7 bytes set the broadcast data - anything after is ignored
                     {
-                        // send over ble (or ant in this case)
-                    }
+                        sent = 1; // to ensure we dont overwrite the data with a message that is too long
 
+                        // set broadcast data ([0] is set already)
+                        m_broadcast_data[1] = m_cdc_data_array[0];
+                        m_broadcast_data[2] = m_cdc_data_array[1];
+                        m_broadcast_data[3] = m_cdc_data_array[2];
+                        m_broadcast_data[4] = m_cdc_data_array[3];
+                        m_broadcast_data[5] = m_cdc_data_array[4];
+                        m_broadcast_data[6] = m_cdc_data_array[5];
+                        m_broadcast_data[7] = m_cdc_data_array[6];
+                    }
                     index = 0;
                 }
 
-                /*Get amount of data transferred*/
-                size_t size = app_usbd_cdc_acm_rx_size(p_cdc_acm);
-                NRF_LOG_DEBUG("RX: size: %lu char: %c", size, m_cdc_data_array[index - 1]);
-
-                /* Fetch data until internal buffer is empty */
+                // Fetch data until internal buffer is empty, we need to read all of buffer even if we dont use it
                 ret = app_usbd_cdc_acm_read(&m_app_cdc_acm,
                                             &m_cdc_data_array[index],
                                             1);
@@ -403,7 +391,7 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
                 }
             }
             while (ret == NRF_SUCCESS);
-
+    
             break;
         }
         default:
@@ -504,7 +492,7 @@ int main(void)
         {
             /* Nothing to do */
         }
-        sd_app_evt_wait(); // wait for an application event
-        //nrf_pwr_mgmt_run();
+        //sd_app_evt_wait(); // wait for an application event
+        nrf_pwr_mgmt_run();
     }
 }
