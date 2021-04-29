@@ -129,7 +129,7 @@ APP_USBD_CDC_ACM_GLOBAL_DEF(m_app_cdc_acm,
 
 // Static variables and buffers.
 static uint8_t m_broadcast_data[ANT_STANDARD_DATA_PAYLOAD_SIZE];  /**< Primary data transmit buffer. */
-static uint8_t m_last_recieved_data[ANT_STANDARD_DATA_PAYLOAD_SIZE - 1 + 2];  /**< Most recent message recieved from master. */
+static uint8_t m_last_recieved_data[ANT_STANDARD_DATA_PAYLOAD_SIZE];  /**< Most recent message recieved from master. */
 
 
 
@@ -138,25 +138,25 @@ static uint8_t m_last_recieved_data[ANT_STANDARD_DATA_PAYLOAD_SIZE - 1 + 2];  /*
  * Byte 1-6 = TODO
  * Byte 7   = TODO
  */
-static void handle_transmit() // skeleton for if this need to be implemented
-{
-    uint32_t err_code;
-
-    m_broadcast_data[0] = ANT_CUSTOM_PAGE;
-    m_broadcast_data[1] = 0xFF;
-    m_broadcast_data[2] = 0xFF;
-    m_broadcast_data[3] = 0xFF;
-    m_broadcast_data[4] = 0xFF;
-    m_broadcast_data[5] = 0xFF;
-    m_broadcast_data[6] = 0xFF;
-    m_broadcast_data[7] = 0xFF;
-
-    err_code = sd_ant_broadcast_message_tx(ANT_CHANNEL_NUM,
-                                           ANT_STANDARD_DATA_PAYLOAD_SIZE,
-                                           m_broadcast_data);
-    APP_ERROR_CHECK(err_code);
-
-}
+//static void handle_transmit() // skeleton for if this needs to be implemented
+//{
+//    uint32_t err_code;
+//
+//    m_broadcast_data[0] = ANT_CUSTOM_PAGE;
+//    m_broadcast_data[1] = 0xFF;
+//    m_broadcast_data[2] = 0xFF;
+//    m_broadcast_data[3] = 0xFF;
+//    m_broadcast_data[4] = 0xFF;
+//    m_broadcast_data[5] = 0xFF;
+//    m_broadcast_data[6] = 0xFF;
+//    m_broadcast_data[7] = 0xFF;
+//
+//    err_code = sd_ant_broadcast_message_tx(ANT_CHANNEL_NUM,
+//                                           ANT_STANDARD_DATA_PAYLOAD_SIZE,
+//                                           m_broadcast_data);
+//    APP_ERROR_CHECK(err_code);
+//
+//}
 
 
 
@@ -208,7 +208,7 @@ static void ant_evt_handler(ant_evt_t * p_ant_evt, void * p_context)
                 bsp_board_led_invert(BSP_BOARD_LED_1);
 
                 // Store previous message
-                uint8_t old_data[ANT_STANDARD_DATA_PAYLOAD_SIZE - 1 + 2];
+                uint8_t old_data[ANT_STANDARD_DATA_PAYLOAD_SIZE];
                 memcpy(old_data, m_last_recieved_data, 8);
 
                 // [0] ignored as it contains 0x1 (The page number)

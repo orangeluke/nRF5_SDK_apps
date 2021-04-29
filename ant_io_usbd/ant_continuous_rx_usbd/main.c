@@ -156,7 +156,7 @@ static void app_timers_setup()
 
 // Static variables and buffers.
 static uint8_t m_broadcast_data[ANT_STANDARD_DATA_PAYLOAD_SIZE];  /**< Primary data transmit buffer. */
-static uint8_t m_last_recieved_data[ANT_STANDARD_DATA_PAYLOAD_SIZE - 1 + 2];  /**< Most recent message recieved from master. */
+static uint8_t m_last_recieved_data[ANT_STANDARD_DATA_PAYLOAD_SIZE];  /**< Most recent message recieved from master. */
 
 
 
@@ -165,25 +165,25 @@ static uint8_t m_last_recieved_data[ANT_STANDARD_DATA_PAYLOAD_SIZE - 1 + 2];  /*
  * Byte 1-6 = TODO
  * Byte 7   = TODO
  */
-static void handle_transmit() // decide what we actually want to sent back - will probably only be used for acknowledgement
-{
-    uint32_t err_code;
-
-    m_broadcast_data[0] = ANT_CUSTOM_PAGE;
-    m_broadcast_data[1] = 0xFF;
-    m_broadcast_data[2] = 0xFF;
-    m_broadcast_data[3] = 0xFF;
-    m_broadcast_data[4] = 0xFF;
-    m_broadcast_data[5] = 0xFF;
-    m_broadcast_data[6] = 0xFF;
-    m_broadcast_data[7] = 0xFF;
-
-    err_code = sd_ant_broadcast_message_tx(ANT_CHANNEL_NUM,
-                                           ANT_STANDARD_DATA_PAYLOAD_SIZE,
-                                           m_broadcast_data);
-    APP_ERROR_CHECK(err_code);
-
-}
+//static void handle_transmit() // commented because slave doesnt send anyway
+//{
+//    uint32_t err_code;
+//
+//    m_broadcast_data[0] = ANT_CUSTOM_PAGE;
+//    m_broadcast_data[1] = 0xFF;
+//    m_broadcast_data[2] = 0xFF;
+//    m_broadcast_data[3] = 0xFF;
+//    m_broadcast_data[4] = 0xFF;
+//    m_broadcast_data[5] = 0xFF;
+//    m_broadcast_data[6] = 0xFF;
+//    m_broadcast_data[7] = 0xFF;
+//
+//    err_code = sd_ant_broadcast_message_tx(ANT_CHANNEL_NUM,
+//                                           ANT_STANDARD_DATA_PAYLOAD_SIZE,
+//                                           m_broadcast_data);
+//    APP_ERROR_CHECK(err_code);
+//
+//}
 
 
 
@@ -208,6 +208,7 @@ void ant_io_rx_setup(void)
     err_code = ant_channel_init(&channel_config);
     APP_ERROR_CHECK(err_code);
 
+    // Start continuous scan
     err_code = sd_ant_rx_scan_mode_start(ANT_CHANNEL_NUM);
     APP_ERROR_CHECK(err_code);
 
@@ -225,12 +226,10 @@ static void ant_evt_handler(ant_evt_t * p_ant_evt, void * p_context)
         case EVENT_RX: // Recieve - happens every channel period
             if (p_ant_evt->message.ANT_MESSAGE_aucPayload[0] == ANT_CUSTOM_PAGE) // make sure the message contains the correct page
             {
-                nrf_gpio_pin_toggle(NRF_GPIO_PIN_MAP(1, 15));
-
                 bsp_board_led_invert(BSP_BOARD_LED_1);
 
                 // Store previous message to compare later
-                uint8_t old_data[ANT_STANDARD_DATA_PAYLOAD_SIZE - 1 + 2];
+                uint8_t old_data[ANT_STANDARD_DATA_PAYLOAD_SIZE];
                 memcpy(old_data, m_last_recieved_data, 8);
 
                 // [0] ignored as it contains 0x1 (The page number)
@@ -246,6 +245,7 @@ static void ant_evt_handler(ant_evt_t * p_ant_evt, void * p_context)
                 // print to USB if content has changed
                 if (memcmp(old_data, m_last_recieved_data, 8) != 0)
                 {
+                    nrf_gpio_pin_toggle(NRF_GPIO_PIN_MAP(1, 15)); // only toggle if data was new or will toggle at every channel period
                     app_usbd_cdc_acm_write(&m_app_cdc_acm, m_last_recieved_data, strlen(m_last_recieved_data));
                 }
 
@@ -355,6 +355,7 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
 
         case APP_USBD_CDC_ACM_USER_EVT_RX_DONE: // happens when data is sent to serial (i.e the user sends via putty)
         {
+            // Commented because dont want the slave do be able to send
             /*
             ret_code_t ret;
             static uint8_t index = 0;

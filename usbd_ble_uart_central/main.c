@@ -199,8 +199,8 @@ static void nus_error_handler(uint32_t nrf_error)
     //APP_ERROR_HANDLER(nrf_error);
     
     // This is generated from ble_nus_c_string_send when there are too many queued notifications
-    // This happens as result from the UI sending messages to the serial port too fast, because the write is tied to a slider_value changed event
-    // Could sort this out in the UI to avoid slider/servo value being out of sync if bulk packets not sent
+    // This happens if you send too many message requests in short period of time
+    // This is solved in the UI, but left here just incase as it is not harmful
     if (nrf_error != NRF_ERROR_RESOURCES) // https://devzone.nordicsemi.com/f/nordic-q-a/35125/how-to-deal-with-nrf_error_resources
     {
         APP_ERROR_HANDLER(nrf_error);

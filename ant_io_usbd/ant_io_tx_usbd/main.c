@@ -126,8 +126,6 @@ APP_USBD_CDC_ACM_GLOBAL_DEF(m_app_cdc_acm,
 
 // Other defs
 
-// Other defs
-
 #define LED_FLASH_INTERVAL 1000/(32768/CHAN_PERIOD) // flash for as many ms as an ANT channel period
 
 APP_TIMER_DEF(m_flash_led);
@@ -181,16 +179,10 @@ static void handle_transmit()
     // We only broadcast one format of data, the first byte represents this
     m_broadcast_data[0] = ANT_CUSTOM_PAGE;
     // These rest of the array is set from a USBD RX event, until then will be at their initialised values (0 because static global)
-    
-    nrf_gpio_pin_set(NRF_GPIO_PIN_MAP(1, 15));        
+         
     err_code = sd_ant_broadcast_message_tx(ANT_CHANNEL_NUM,
                                            ANT_STANDARD_DATA_PAYLOAD_SIZE,
                                            m_broadcast_data); // This applies to the next message that is sent on the timeslot
-    nrf_gpio_pin_clear(NRF_GPIO_PIN_MAP(1, 15));
-    // gives a latency of 44.2 microseconds...
-    // probably because this is setting the next packet
-    // after the previous one has already been sent
-    // which gives very misleading results
 
     APP_ERROR_CHECK(err_code);
 }
@@ -235,11 +227,10 @@ static void ant_evt_handler(ant_evt_t * p_ant_evt, void * p_context)
     {
         case EVENT_RX:
 
-            if (p_ant_evt->message.ANT_MESSAGE_aucPayload[0] == ANT_CUSTOM_PAGE) // check rx to see what this is (not done yet)
+            if (p_ant_evt->message.ANT_MESSAGE_aucPayload[0] == ANT_CUSTOM_PAGE)
             {
-                // Set LEDs according to Received Digital IO Data Page
-                //m_rx_input_pin_state = p_ant_evt->message.ANT_MESSAGE_aucPayload[7];
-                //led_state_set();
+                // Ignore recieves as slave doesnt send anything
+
             }
             break;
 
@@ -248,14 +239,6 @@ static void ant_evt_handler(ant_evt_t * p_ant_evt, void * p_context)
             bsp_board_led_invert(BSP_BOARD_LED_2);
             handle_transmit();
             break;
-
-        // LOOK INTO USING THIS TO SET THE GPIO PIN
-        case EVENT_TRANSFER_TX_START: // this is only for burst transfers so does nothing
-            //nrf_gpio_pin_set(NRF_GPIO_PIN_MAP(1, 15));
-            //nrf_gpio_pin_clear(NRF_GPIO_PIN_MAP(1, 15));
-            break;
-        
-
 
         default:
             break;
@@ -377,6 +360,8 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
                         m_broadcast_data[5] = m_cdc_data_array[4];
                         m_broadcast_data[6] = m_cdc_data_array[5];
                         m_broadcast_data[7] = m_cdc_data_array[6];
+
+                        nrf_gpio_pin_toggle(NRF_GPIO_PIN_MAP(1, 15));
                     }
                     index = 0;
                 }

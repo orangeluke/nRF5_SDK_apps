@@ -164,13 +164,15 @@ static void app_timers_setup()
 
 // Static variables and buffers.
 static uint8_t m_broadcast_data[ANT_STANDARD_DATA_PAYLOAD_SIZE];          /**< Primary data transmit buffer. */
-static uint8_t  m_retries;                                                /**< Number of remaining retries */
 
-#define MAX_RETRIES                    8                                  /**< Maximum number of retries for sending a command */
-#define MIN_BACKOFF_TIME               5                                 /**< Minimum number of ms to wait before next retry attempt. The maximum back off time is MAX_BACKOFF_TIME */
-#define MAX_BACKOFF_TIME               10                                 /**<  */
 
-//APP_TIMER_DEF(m_backoff_timer);                                           /**< Back off timer */
+//static uint8_t  m_retries;                                                /**< Number of remaining retries */
+
+//#define MAX_RETRIES                    8                                  /**< Maximum number of retries for sending a command */
+//#define MIN_BACKOFF_TIME               5                                 /**< Minimum number of ms to wait before next retry attempt.*/
+//#define MAX_BACKOFF_TIME               10
+
+//APP_TIMER_DEF(m_backoff_timer);                                          /**< Back off timer */
 
 
 
@@ -216,7 +218,7 @@ static void handle_transmit()
                                              ANT_STANDARD_DATA_PAYLOAD_SIZE,
                                              m_broadcast_data); // in the case of async, this transmits a message rather than sets the data for the next timed tx
 
-    if(err_code != NRF_ANT_ERROR_TRANSFER_IN_PROGRESS) // ignore this error as it will happen when moving the slider in the UI, in this case the packet is simply dropped
+    if(err_code != NRF_ANT_ERROR_TRANSFER_IN_PROGRESS) // This happens when messages are tried to be sent too fast, in this case the tx request is just ignored
     {
         APP_ERROR_CHECK(err_code);
     }
@@ -242,8 +244,6 @@ static void handle_transmit()
 //}
 
 
-
-
 /**@brief Handler for backoff timer event
  *
  * @param[in] p_context   Pointer to context
@@ -252,8 +252,6 @@ static void handle_transmit()
 //{
 //    retry_transmit();
 //}
-
-
 
 
 void ant_io_tx_setup(void)
@@ -269,7 +267,7 @@ void ant_io_tx_setup(void)
         .transmission_type = CHAN_ID_TRANS_TYPE,
         .device_type       = CHAN_ID_DEV_TYPE,
         .device_number     = NRF_FICR->DEVICEID[0],
-        .channel_period    = CHAN_PERIOD,           // seemingly ignored in async transfer (messages can be sent much faster than this period)
+        .channel_period    = CHAN_PERIOD,           // ignored in async transfer (messages can be sent much faster than this period)
         .network_number    = ANT_NETWORK_NUM,
     };
 
@@ -284,10 +282,9 @@ void ant_io_tx_setup(void)
     //                            backoff_timer_evt_handler);
     //APP_ERROR_CHECK(err_code);
 
-    // Open channel
-    //err_code = sd_ant_channel_open(ANT_CHANNEL_NUM);  We dont open the channel in async mode?
-    //APP_ERROR_CHECK(err_code);
+    // The channel is not opened in async mode
 }
+
 
 /**@brief Function for handling a ANT stack event.
  *
@@ -311,7 +308,7 @@ static void ant_evt_handler(ant_evt_t * p_ant_evt, void * p_context)
             // Notify failiure - the UI will keep count of this rather than this application
             app_usbd_cdc_acm_write(&m_app_cdc_acm, FAILED_TX_MESSAGE, strlen(FAILED_TX_MESSAGE));
 
-            // then try to send the message again because we are async
+            // Dont resend because cant replicate BLE so not fair comparison - leave packet as lost
             //m_retries = MAX_RETRIES; // specify number of retries allowed
 
             //uint32_t backoff_time = (uint32_t) rnd_backoff_generate();
@@ -328,8 +325,6 @@ static void ant_evt_handler(ant_evt_t * p_ant_evt, void * p_context)
             break;
     }
 }
-
-
 
 
 NRF_SDH_ANT_OBSERVER(m_ant_observer, APP_ANT_OBSERVER_PRIO, ant_evt_handler, NULL);
@@ -448,7 +443,7 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
                         m_broadcast_data[6] = m_cdc_data_array[5];
                         m_broadcast_data[7] = m_cdc_data_array[6];
 
-                        m_retries = 1; // to allow handle_transmit to send the message
+                        //m_retries = 1; // to allow handle_transmit to send the message
                         handle_transmit(); // send the ant message
                     }
                     index = 0;

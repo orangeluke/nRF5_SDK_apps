@@ -236,17 +236,13 @@ static void ant_evt_handler(ant_evt_t * p_ant_evt, void * p_context)
             //bsp_board_led_invert(BSP_BOARD_LED_2);
             if (p_ant_evt->message.ANT_MESSAGE_aucPayload[0] == ANT_CUSTOM_PAGE) // check rx to see what this is (not done yet)
             {
-                //flash_led(BSP_BOARD_LED_2);
-                // Set LEDs according to Received Digital IO Data Page
-                //m_rx_input_pin_state = p_ant_evt->message.ANT_MESSAGE_aucPayload[7];
-                //led_state_set();
+
             }
 
 
             break;
 
         case EVENT_TX: // Used to initially set the ack_message_tx as default is broadcast
-            // MIGHT be worth trying to set the GPIO pin here and see what the logic analyser output looks like
         case EVENT_TRANSFER_TX_COMPLETED: // only triggers if a acknowledged message is successful
             bsp_board_led_invert(BSP_BOARD_LED_2);
             
@@ -384,6 +380,7 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
                         m_broadcast_data[5] = m_cdc_data_array[4];
                         m_broadcast_data[6] = m_cdc_data_array[5];
                         m_broadcast_data[7] = m_cdc_data_array[6];
+
                         nrf_gpio_pin_toggle(NRF_GPIO_PIN_MAP(1, 15));
                     }
                     index = 0;
